@@ -96,7 +96,7 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     return gal_moments
 
-def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, round_moments=False, matrix_inv=False):
+def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sigma_scalefactor=1., round_moments=False, matrix_inv=False):
     if not isinstance(gal_img, galsim.Image):
         gal_img = galsim.Image(gal_img)
 
@@ -115,8 +115,17 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, round_moments=False
    
     ## If round_moments is True, we need a circular weight function. The observed_shape cannot be used as it contains the ellipticity of the object.
     ## Hence, the ellipticity has to be explicitly set to zero.
-    weight = get_weight_image(gal_grid, gauss_moments.moments_sigma, gauss_moments.observed_shape.g1*(not round_moments), gauss_moments.observed_shape.g2*(not round_moments) )
-    DW = generate_deweighting_matrix(gauss_moments.moments_sigma, gauss_moments.observed_shape.g1*(not round_moments), gauss_moments.observed_shape.g2*(not round_moments), nw=nw)
+    if round_moments:
+        weight_g1, weight_g2 = 0., 0.
+    else:
+        weight_g1, weight_g2 = gauss_moments.observed_shape.g1, gauss_moments.observed_shape.g2
+    if w_sigma is None or w_sigma<=0.:
+        weight_sigma = gauss_moments.moments_sigma
+
+    weight_sigma *= w_sigma_scalefactor
+
+    weight = get_weight_image( gal_grid, weight_sigma, weight_g1, weight_g2 )
+    DW = generate_deweighting_matrix( weight_sigma, weight_g1, weight_g2, nw=nw)
     
     kmax = (nw+3)*(nw+4)/2
     weighted_img_moments, psf_moments = np.zeros(kmax), np.zeros(6)
