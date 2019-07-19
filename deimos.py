@@ -1,48 +1,10 @@
 import numpy as np
 import galsim
 from scipy.special import binom
+from helper import *
+from moments import *
 
 ## Metacalibration routines
-
-def shear_matrix(g1, g2, kappa=None):
-    """ Return the 2x2 shear operator
-
-    If kappa is None, the determinant of the shear operator is set to 1.
-    If kappa is a real number, the determinant of the shear operator is (1-kappa)(1-|g|)
-    """
-    A = np.array([[1.-g1, -g2],[-g2, 1.+g1]])
-    if kappa is None:
-        norm = 1./(1.-np.sqrt(g1**2+g2**2))
-    else:
-        norm = (1.-kappa)
-    A *= norm
-    return A
-
-def generate_pixelgrid(centroid, size, scale=1.0):
-    x = np.arange(-0.5*size[0]-centroid[0],0.5*size[0]-centroid[0]+0.1*scale,scale)
-    y = np.arange(-0.5*size[1]-centroid[1],0.5*size[1]-centroid[1]+0.1*scale,scale)
-    X,Y = np.meshgrid(x,y)
-    return X,Y
-
-def shear_pixelgrid(grid, A):
-    """ Shear the pixel grid to generate an affine grid
-    """
-    X, Y = grid
-    x, y = X.flatten(), Y.flatten()
-    xy = np.stack([x,y])
-    assert xy.shape==(2,X.size)
-    sheared_xy = np.dot(A,xy)
-    x, y = sheared_xy[0], sheared_xy[1]
-    sheared_grid = (np.reshape(x,X.shape),np.reshape(y.Y.shape))
-    return sheared_grid
-
-def shear_monomial(m, n, sheared_grid):
-    X, Y = sheared_grid
-    monomial = (X**m)*(Y**n)
-    return monomial
-
-def shear_gaussian():
-    return sheared_gaussian
 
 ## DEIMOS-specific
 
@@ -61,41 +23,36 @@ def generate_deweighting_matrix(sigma, e1, e2, nw=6):
     DW = np.eye(6,kmax)
 
     for kdw in xrange(6):
-        i,j = single_to_doublet(kdw)
+        i,j = singlet_to_doublet(kdw)
 
         if nw>=2:
-            ## 2nd order
-            DW[kdw, doublet_to_singlet(i+2,j)] = 0.5*c1/sigma**2
-            DW[kdw, doublet_to_singlet(i+1,j+1)] = -2.*e2/sigma**2
-            DW[kdw, doublet_to_singlet(i,j+2)] = 0.5*c2/sigma**2
+            ## 2nd order corrections
+            denom = sigma**2
+            DW[kdw, doublet_to_singlet(i+2,j+0)] = 0.5*c1/denom
+            DW[kdw, doublet_to_singlet(i+1,j+1)] = -2.*e2/denom
+            DW[kdw, doublet_to_singlet(i+0,j+2)] = 0.5*c2/denom
 
         if nw>=4:
-            ## 4th order
-            DW[kdw, doublet_to_singlet(i+4,j)] = 0.125*c1**2/sigma**4
-            DW[kdw, doublet_to_singlet(i+3,j+1)] = -c1*e2/sigma**4 ## check this
-            DW[kdw, doublet_to_singlet(i+2,j+2)] = 0.25*(c1*c2 + 8*e2**2)/sigma**4
-            DW[kdw, doublet_to_singlet(i+1,j+3)] = c2*e2/sigma**4  ## check this
-            DW[kdw, doublet_to_singlet(i,j+4)] = 0.125*c2**2/sigma**4
+            ## 4th order corrections
+            denom = sigma**4
+            DW[kdw, doublet_to_singlet(i+4,j+0)] = 0.125*c1**2/denom
+            DW[kdw, doublet_to_singlet(i+3,j+1)] = -c1*e2/denom
+            DW[kdw, doublet_to_singlet(i+2,j+2)] = 0.25*(c1*c2 + 8*e2**2)/denom
+            DW[kdw, doublet_to_singlet(i+1,j+3)] = -c2*e2/denom
+            DW[kdw, doublet_to_singlet(i+0,j+4)] = 0.125*c2**2/denom
 
         if nw>=6:
-            ## 6th order
-            DW[kdw, doublet_to_singlet(i+6,j)] = c1**3/(48.*sigma**6)
-            DW[kdw, doublet_to_singlet(i+5,j+1)] = -0.25*(c1**2)*e2/sigma**6
-            DW[kdw, doublet_to_singlet(i+4,j+2)] = 0.0625*(c2*c1**2 + c1*e2**2)/sigma**6
-            DW[kdw, doublet_to_singlet(i+3,j+3)] = -(3.*c1*c2*e2 + 8.*e2**3)/sigma**6
-            DW[kdw, doublet_to_singlet(i+2,j+4)] = 0.0625*(c1*c2**2 + c2*e2**2)/sigma**6
-            DW[kdw, doublet_to_singlet(i+1,j+5)] = -0.25*e2*c2**3/sigma**6
-            DW[kdw, doublet_to_singlet(i,j+6)] = c2**3/(48.*sigma**6)
+            ## 6th order corrections
+            denom = 48.*sigma**6
+            DW[kdw, doublet_to_singlet(i+6,j+0)] = c1**3/denom
+            DW[kdw, doublet_to_singlet(i+5,j+1)] = -12.*(c1**2)*e2/denom
+            DW[kdw, doublet_to_singlet(i+4,j+2)] = (3.*c2*c1**2 + 48.*c1*e2**2)/denom
+            DW[kdw, doublet_to_singlet(i+3,j+3)] = -(24.*c1*c2*e2 + 64.*e2**3)/denom
+            DW[kdw, doublet_to_singlet(i+2,j+4)] = (3.*c1*c2**2 + 48.*c2*e2**2)/denom
+            DW[kdw, doublet_to_singlet(i+1,j+5)] = -12.*e2*c2**2/denom
+            DW[kdw, doublet_to_singlet(i+0,j+6)] = c2**3/denom
 
     return DW
-
-def measure_moments(m, n, image, grid, gauss_sigma=0., gauss_e1=0., gauss_e2=0., A=None):
-    """ Measure the moments of an image on the pixel grid, with an optional elliptical Gaussian weight function.
-        If gauss_sigma = 0, then unweighted moments are returned (for PSF)
-        if A is not None, then the grid and the weight (if defined) are sheared before computing the moments
-    """
-
-    return Qmn
 
 def psf_correction(image_moments, psf_moments, matrix_inv=False):
     """ Given the PSF-convolved deweighted galaxy moments and PSF moments, calculate the moments of the intrinsic galaxy
@@ -103,6 +60,7 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
     """
 
     if matrix_inv:
+        print "Doing matrix inversion"
         ## Most generic and elegant way involving matrix inversion
         P = np.eye(6)
 
@@ -120,11 +78,12 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     else:
         ## Rudimentary implementation of Table 1 of Melchior et al (2012)
+        print "NOT doing matrix inversion"
 
         psf00 = psf_moments[doublet_to_singlet(0,0)]
 
         ## 0-th order moments
-        gal_moments = image_moments / psf00
+        gal_moments = image_moments[:6] / psf00
 
         ## 1-st order moments
         ## Assumes (0,0) --> 0
@@ -137,105 +96,35 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     return gal_moments
 
-def moments_to_ellipticity(moment_vector, etype='epsilon'):
-    """ Calculate the ellipticity given the moments
+def deimos(gal_img, psf_img, nw=6, scale=1., round_moments=False, matrix_inv=False):
+    if not isinstance(gal_img, galsim.Image):
+        gal_img = galsim.Image(gal_img)
 
-        @param moment_vector     a numpy array containing the moments
-        @param etype             must be one of 'linear', 'flux_norm', 'chi' or 'epsilon' (default)
+    gauss_moments = gal_img.FindAdaptiveMom(round_moments=round_moments, strict=False)
+    if gauss_moments.moments_status!=0:
+        return -99,-99
 
-        @returns ellipticity tuple, defined by etype
-    """
-
-    if etype=='epsilon':
-        denom = moment_vector[doublet_to_singlet(0,2)] + moment_vector[doublet_to_singlet(2,0)]
-        denom += 2*np.sqrt( moment_vector[doublet_to_singlet(0,2)]*moment_vector[doublet_to_singlet(2,0)] - moment_vector[doublet_to_singlet(1,1)]**2 )
-    elif etype=='chi':
-        denom = moment_vector[doublet_to_singlet(0,2)] + moment_vector[doublet_to_singlet(2,0)]
-    elif etype=='linear':
-        denom = 1.
-    elif etype=='flux_norm':
-        denom = moment_vector[doublet_to_singlet(0,0)]
-    else:
-        raise ValueError(" etype must be one of 'linear', 'chi' or 'epsilon' ")
-
-    e1 = (moment_vector[doublet_to_singlet(2,0)] - moment_vector[doublet_to_singlet(0,2)])/denom
-    e2 = 2.*moment_vector[doublet_to_singlet(1,1)]/denom
-
-    return e1, e2
-
-## Helper routines
-def doublet_to_singlet(i,j):
-    """ Convert an index (i,j) to a single number for accessing
-    """
-
-    if (i<0)|(j<0):
-        raise ValueError(" The doublet indices must be non-negative integers ")
-
-    if (i!=int(i))|(j!=int(j)):
-        raise TypeError(" The doublet indices must be integers (non-negative) ")
+    centroid = [gauss_moments.moments_centroid.x - gal_img.center.x, gauss_moments.moments_centroid.y - gal_img.center.y]
+    print "Generated centroid = ", centroid
+    psf_grid = generate_pixelgrid(centroid, psf_img.array.shape, scale=scale)
+    gal_grid = generate_pixelgrid(centroid, gal_img.array.shape, scale=scale)
+   
+    ## If round_moments is True, we need a circular weight function. The observed_shape cannot be used as it contains the ellipticity of the object.
+    ## Hence, the ellipticity has to be explicitly set to zero.
+    weight = get_weight_image(gal_grid, gauss_moments.moments_sigma, gauss_moments.observed_shape.g1*(not round_moments), gauss_moments.observed_shape.g2*(not round_moments) )
+    DW = generate_deweighting_matrix(gauss_moments.moments_sigma, gauss_moments.observed_shape.g1*(not round_moments), gauss_moments.observed_shape.g2*(not round_moments), nw=nw)
     
-    if not (isinstance(i,int) & isinstance(j, int)):
-        import warnings
-        warnings.warn(" The doublet indices should be of type int ")
-        i, j = int(i), int(j)
-
-    n = i+j
-
-    k = n*(n+1)/2
-    k += i
-
-    assert k>=0 
-
-    return k
-
-def singlet_to_doublet(k):
-    """ Convert an accessing index k to the doublet index (i,j)
-    """
-
-    if k<0:
-        raise ValueError(" The singlet index must be non-negative (and integral) ")
-
-    if (k!=int(k)):
-        raise TypeError(" The singlet index must be an integer (and non-negative) ")
-
-    if not isinstance(k,int):
-        import warnings
-        warnings.warn(" The singlet index should be of type int ")
-        k = int(k)
-
-    ## Find the smallest non-negative integer n such that
-    ## 1+2+...+(n+1) = (n+1)(n+2)/2 >= k+1
-    n = int(np.ceil(0.5*(-3+np.sqrt(9.+8.*k))))
-    i = k - n*(n+1)/2
-    j = n - i
-
-    assert i>=0
-    assert j>=0
-
-    return i, j
-
-def get_conversion_dicts(nmax=8):
-    """ Pre-compute the conversions between singlet and doublet indices
-    """
-
-    if nmax<0:
-        raise ValueError(" The maximum order must be non-negative (and integral) ")
-
-    if (nmax!=int(nmax)):
-        raise TypeError(" The maximum order must be an integer (and non-negative) ")
-
-    if not isinstance(nmax,int):
-        import warnings
-        warnings.warn(" The maximum order should be of type int ")
-        nmax = int(nmax)
-
-    kmax = (nmax+1)*(nmax+2)/2
-
-    d2s, s2d = {}, {}
-    
+    kmax = (nw+3)*(nw+4)/2
+    weighted_img_moments, psf_moments = np.zeros(kmax), np.zeros(6)
     for k in xrange(kmax):
-        i,j = singlet_to_double(k)
-        s2d[k] = (i,j)
-        d2s[(i,j)] = k
+        m,n = singlet_to_doublet(k)
+        if k<6:
+            psf_moments[k] = measure_moments(m,n,psf_img,psf_grid,1.)
+        weighted_img_moments[k] = measure_moments(m,n,gal_img,gal_grid,weight)
 
-    return d2s, s2d
+    deweighted_img_moments = np.dot(DW, weighted_img_moments)
+    psf_corrected_moments = psf_correction(deweighted_img_moments, psf_moments, matrix_inv=matrix_inv)
+
+    ellipticity = moments_to_ellipticity(psf_corrected_moments)
+
+    return ellipticity
