@@ -96,7 +96,7 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     return gal_moments
 
-def deimos(gal_img, psf_img, nw=6, scale=1., round_moments=False, matrix_inv=False):
+def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, round_moments=False, matrix_inv=False):
     if not isinstance(gal_img, galsim.Image):
         gal_img = galsim.Image(gal_img)
 
@@ -105,8 +105,12 @@ def deimos(gal_img, psf_img, nw=6, scale=1., round_moments=False, matrix_inv=Fal
         return -99,-99
 
     centroid = [gauss_moments.moments_centroid.x - gal_img.center.x, gauss_moments.moments_centroid.y - gal_img.center.y]
-    print "Generated centroid = ", centroid
-    psf_grid = generate_pixelgrid(centroid, psf_img.array.shape, scale=scale)
+
+    if psf_scale is None:
+        ## Set psf_scale = scale, same as the galaxy scale
+        psf_scale = scale
+
+    psf_grid = generate_pixelgrid(centroid, psf_img.array.shape, scale=psf_scale)
     gal_grid = generate_pixelgrid(centroid, gal_img.array.shape, scale=scale)
    
     ## If round_moments is True, we need a circular weight function. The observed_shape cannot be used as it contains the ellipticity of the object.

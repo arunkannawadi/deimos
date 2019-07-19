@@ -84,17 +84,17 @@ def test_deimos():
 
     gal_n, gal_hlr = 1.5, 2.5
     psf_sigma = 0.7
-    scale = 0.1
+    scale, psf_scale = 0.1, 0.05
     gal_shape = galsim.Shear(g1=0.4,g2=0.3)
     psf_shape = galsim.Shear(g1=0.01,g2=0.02)
     psf = galsim.Gaussian(sigma=psf_sigma).shear(psf_shape)
     gal = galsim.Sersic(n=gal_n, half_light_radius=gal_hlr).shear(gal_shape)
-    gal_img = galsim.Convolve([gal,psf]).drawImage(scale=scale)
-    psf_img = psf.drawImage(scale=scale)
+    gal_img = galsim.Convolve([gal,psf]).drawImage(scale=scale, method='no_pixel')
+    psf_img = psf.drawImage(scale=psf_scale, method='no_pixel')
 
     print "True shape = ", gal_shape
     for nw in [2,4,6]:
-        int_shape = deimos(gal_img, psf_img, nw=nw, scale=scale)
+        int_shape = deimos(gal_img, psf_img, nw=nw, scale=scale, psf_scale=psf_scale)
         print "Measured shape for nw=", nw, " is ", int_shape
 
     t2 = time.time()
