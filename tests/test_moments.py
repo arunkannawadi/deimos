@@ -3,6 +3,7 @@ import galsim
 import os, sys, time
 
 sys.path.append('/Users/arunkannawadi/moments_metacal/')
+sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/')
 from helper import *
 from moments import *
 from test_helper import assert_all

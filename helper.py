@@ -1,4 +1,6 @@
 import numpy as np
+import os, sys
+sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos')
 from metacal import shear_pixelgrid
 
 def shear_matrix(g1, g2, kappa=None):
@@ -25,11 +27,26 @@ def get_weight_image(grid, gauss_sigma=1., gauss_e1=0., gauss_e2=0., A=None):
     """ Generate
     """
 
-    E = shear_matrix(gauss_e1, gauss_e2, kappa=None)
-    sheared_grid = shear_pixelgrid(grid, E)
-    X, Y = sheared_grid
+    if gauss_e2==0. and A is None:
+        X, Y = grid
+        x, y = X[0], Y[:,0]
 
-    weight = np.exp(-0.5*(X**2+Y**2)/gauss_sigma**2)
+        np.testing.assert_array_equal(X[0],X[-1])
+        np.testing.assert_array_equal(Y[:,0],Y[:,-1])
+
+        q = ((1.-gauss_e1)/(1.+gauss_e1))
+        sx = gauss_sigma/np.sqrt(q)
+        sy = gauss_sigma*np.sqrt(q)
+
+        weight = np.outer(np.exp(-0.5*y**2/sy**2), np.exp(-0.5*x**2/sx**2))
+
+    else:
+        E = shear_matrix(gauss_e1, gauss_e2, kappa=None)
+        sheared_grid = shear_pixelgrid(grid, E)
+        X, Y = sheared_grid
+
+        weight = np.exp(-0.5*(X**2+Y**2)/gauss_sigma**2)
+
     return weight
 
 ## Helper routines
@@ -73,7 +90,7 @@ def singlet_to_doublet(k):
         k = int(k)
 
     ## Find the smallest non-negative integer n such that
-    ## 1+2+...+(n+1) = (n+1)(n+2)/2 >= k+1cmi
+    ## 1+2+...+(n+1) = (n+1)(n+2)/2 >= k+1
     n = int(np.ceil(0.5*(-3+np.sqrt(9.+8.*k))))
     i = k - n*(n+1)/2
     j = n - i

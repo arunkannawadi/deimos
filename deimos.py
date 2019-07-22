@@ -1,6 +1,8 @@
 import numpy as np
 import galsim
 from scipy.special import binom
+import os, sys
+sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos/')
 from helper import *
 from moments import *
 
@@ -102,7 +104,7 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sig
 
     gauss_moments = gal_img.FindAdaptiveMom(round_moments=round_moments, strict=False)
     if gauss_moments.moments_status!=0:
-        return -99,-99
+        return -99,-99,-1
 
     centroid = [gauss_moments.moments_centroid.x - gal_img.center.x, gauss_moments.moments_centroid.y - gal_img.center.y]
 
@@ -121,6 +123,8 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sig
         weight_g1, weight_g2 = gauss_moments.observed_shape.g1, gauss_moments.observed_shape.g2
     if w_sigma is None or w_sigma<=0.:
         weight_sigma = gauss_moments.moments_sigma
+    else:
+        weight_sigma = w_sigma
 
     weight_sigma *= w_sigma_scalefactor
 
@@ -132,12 +136,12 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sig
     for k in xrange(kmax):
         m,n = singlet_to_doublet(k)
         if k<6:
-            psf_moments[k] = measure_moments(m,n,psf_img,psf_grid,1.)
-        weighted_img_moments[k] = measure_moments(m,n,gal_img,gal_grid,weight)
+            psf_moments[k] = measure_moments(m,n,psf_img,psf_grid,1.,A=None)
+        weighted_img_moments[k] = measure_moments(m,n,gal_img,gal_grid,weight,A=None)
 
     deweighted_img_moments = np.dot(DW, weighted_img_moments)
     psf_corrected_moments = psf_correction(deweighted_img_moments, psf_moments, matrix_inv=matrix_inv)
 
     ellipticity = moments_to_ellipticity(psf_corrected_moments)
 
-    return ellipticity
+    return ellipticity+(0,)

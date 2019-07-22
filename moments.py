@@ -1,5 +1,7 @@
 import numpy as np
 import galsim
+import os, sys
+sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos')
 from helper import *
 
 def measure_moments(m, n, image, grid, weight, A=None):
@@ -11,7 +13,21 @@ def measure_moments(m, n, image, grid, weight, A=None):
     X, Y = grid
     if isinstance(image, galsim.Image):
         image = image.array
-    Qmn = np.sum( (X**m)*(Y**n)*weight*image )
+
+    ## If the grid is rectangular and A is None, then it's faster to raise the 1-D arrays to m/n power and grid them
+    if A is None:
+        x, y = X[0], Y[:,0]
+
+        np.testing.assert_array_equal(X[0],X[-1])
+        np.testing.assert_array_equal(Y[:,0],Y[:,-1])
+
+        xm, yn = x**m, y**n
+        XmYn = np.outer(yn,xm)
+    else:
+        Xm, Yn = X**m, Y**n
+        XmYn = Xm*Yn
+
+    Qmn = np.sum( (XmYn)*weight*image )
     return Qmn
 
 def moments_to_size(moment_vector, size_type='det', flux_normalized=True):
