@@ -98,13 +98,14 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     return gal_moments
 
-def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sigma_scalefactor=1., round_moments=False, matrix_inv=False):
+def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigma=None, w_sigma_scalefactor=1., round_moments=False, matrix_inv=False):
     if not isinstance(gal_img, galsim.Image):
         gal_img = galsim.Image(gal_img)
 
     gauss_moments = gal_img.FindAdaptiveMom(round_moments=round_moments, strict=False)
     if gauss_moments.moments_status!=0:
-        return -99,-99,-1
+        len_nw = len(nw) if hasattr(nw,'__iter__') else 1
+        return [(-99,-99,-1)]*len_nw
 
     centroid = [gauss_moments.moments_centroid.x - gal_img.center.x, gauss_moments.moments_centroid.y - gal_img.center.y]
 
@@ -112,7 +113,7 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sig
         ## Set psf_scale = scale, same as the galaxy scale
         psf_scale = scale
 
-    psf_grid = generate_pixelgrid(centroid, psf_img.array.shape, scale=psf_scale)
+    psf_grid = generate_pixelgrid([-0.5,-0.5], psf_img.array.shape, scale=psf_scale)
     gal_grid = generate_pixelgrid(centroid, gal_img.array.shape, scale=scale)
    
     ## If round_moments is True, we need a circular weight function. The observed_shape cannot be used as it contains the ellipticity of the object.
@@ -129,9 +130,16 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sig
     weight_sigma *= w_sigma_scalefactor
 
     weight = get_weight_image( gal_grid, weight_sigma, weight_g1, weight_g2 )
-    DW = generate_deweighting_matrix( weight_sigma, weight_g1, weight_g2, nw=nw)
     
-    kmax = (nw+3)*(nw+4)/2
+    if hasattr(nw,'__iter__'):
+        nw_list = nw
+    else:
+        nw_list = [ nw ]
+
+    nw_max = max(nw_list)
+    DW = generate_deweighting_matrix( weight_sigma, weight_g1, weight_g2, nw=nw_max)
+
+    kmax = (nw_max+3)*(nw_max+4)/2
     weighted_img_moments, psf_moments = np.zeros(kmax), np.zeros(6)
     for k in xrange(kmax):
         m,n = singlet_to_doublet(k)
@@ -139,9 +147,13 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, w_sigma=None, w_sig
             psf_moments[k] = measure_moments(m,n,psf_img,psf_grid,1.,A=None)
         weighted_img_moments[k] = measure_moments(m,n,gal_img,gal_grid,weight,A=None)
 
-    deweighted_img_moments = np.dot(DW, weighted_img_moments)
-    psf_corrected_moments = psf_correction(deweighted_img_moments, psf_moments, matrix_inv=matrix_inv)
+    ellipticity = [ ]
+    for nw in nw_list:
+        kmax = (nw+3)*(nw+4)/2
+        deweighted_img_moments = np.dot(DW[:,:kmax], weighted_img_moments[:kmax])
+        psf_corrected_moments = psf_correction(deweighted_img_moments, psf_moments, matrix_inv=matrix_inv)
+        ellip = moments_to_ellipticity(psf_corrected_moments, etype=etype)
 
-    ellipticity = moments_to_ellipticity(psf_corrected_moments)
+        ellipticity.append( ellip+(0,) )
 
-    return ellipticity+(0,)
+    return ellipticity
