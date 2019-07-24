@@ -1,3 +1,6 @@
+## Helper script defining some convenience functions
+## Author: Arun Kannawadi
+
 import numpy as np
 import os, sys
 sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos')

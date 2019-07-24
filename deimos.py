@@ -1,3 +1,6 @@
+## Main script implementing the DEIMOS method
+## Author: Arun Kannawadi
+
 import numpy as np
 import galsim
 from scipy.special import binom
@@ -5,10 +8,6 @@ import os, sys
 sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos/')
 from helper import *
 from moments import *
-
-## Metacalibration routines
-
-## DEIMOS-specific
 
 def generate_deweighting_matrix(sigma, e1, e2, nw=6):
     """ Construct the deweighting matrix given the Gaussian weight parameters, up to order nw.
@@ -62,7 +61,6 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
     """
 
     if matrix_inv:
-        print "Doing matrix inversion"
         ## Most generic and elegant way involving matrix inversion
         P = np.eye(6)
 
@@ -80,7 +78,6 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     else:
         ## Rudimentary implementation of Table 1 of Melchior et al (2012)
-        print "NOT doing matrix inversion"
 
         psf00 = psf_moments[doublet_to_singlet(0,0)]
 
@@ -98,38 +95,91 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     return gal_moments
 
-def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigma=None, w_sigma_scalefactor=1., round_moments=False, matrix_inv=False):
+def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigma=None, w_sigma_scalefactor=1., psf_w_sigma=None, round_moments=False, hsmparams=None, matrix_inv=False):
+    """ Calculate the ellipticity of the galaxy using the DEIMOS method (Melchior et al., 2012) given the galaxy and PSF postage stamps.
+
+        @params gal_img         Postage stamp of the PSF-convolved galaxy. This can either be a galsim.Image instance or a NumPy array.
+        @params psf_img         Postage stamp of the PSF. This can either be a galsim.Image instance or a NumPy array.
+
+        @params nw                      The maximum order of correction terms to include. This can be an integer or a list of admissible values.
+                                        The admissible values are 0, 2, 4, 6. [Default: 6]
+        @params scale                   The pixel scale of gal_img. [Default: 1]
+        @params psf_scale               The pixel scale of psf_img. If set to None, this will take the value of 'scale'. [Default: 1]
+        @params etype                   The type of ellipticity to return. The admissible options are 'chi', 'epsilon', 'linear' (BJ02) and
+                                        'flux_norm' (similar to 'linear' but normalised by the flux). The 'epsilon' type ellipticities fail if the determinant
+                                        of the deweighted second moment matrix is negative. [Default: 'chi']
+        @params w_sigma                 The width of the (circularised) Gaussian weight function, in units of pixels, to calculate the weighted moments of the galaxy.
+                                        The moments_sigma value from galsim.ShapeData can be passed on without worrying about the pixel scale.
+                                        If set to a non-positive value or None, adaptive weights are computed internally. [Default: None]
+        @params w_sigma_scalefactor     The number by which the w_sigma is to be scaled. [Default: 1]
+        @params psf_w_sigma             The width of the (circularised) Gaussian weight function, in units of pixels, to calculate the weighted moments of the PSF.
+                                        If set to a negative value, unweighted moments are used. If set to 0, adaptive weights are computed internally.
+                                        If set to None, the same width used for the galaxy image (along with w_sigma_scalefactor) is used (recommended). [Default: None]
+        @params round_moments           Setting this true will force the Gaussian to be circular (and slightlu faster computations). [Default: False]
+        @params hsmparams               A galsim.hsm.HSMParams instance to change the default settings in the calculation of adaptive moments.
+                                        If None, default values are used. [Default: None]
+        @params matrix_inv              Whether to incorportate PSF-correction as a matrix operation or not. This choice has little impact on the results. [Default: False]
+
+        @returns                        A tuple or a list of tuples (depending on the type of 'nw') containing ellipticities of the type 'etype' and a status flag.
+                                        0 indicates reliable measurement, -1 indicates failure of adaptive moments routine. -2 indicates that the determinant of the
+                                        deweighted quadrupole moments is negative and -3 indicates that at least one of the deweighted (2,0) or (0,2) moments is negative.
+    """
+
     if not isinstance(gal_img, galsim.Image):
         gal_img = galsim.Image(gal_img)
+    if not isinstance(psf_img, galsim.Image):
+        psf_img = galsim.Image(psf_img)
 
-    gauss_moments = gal_img.FindAdaptiveMom(round_moments=round_moments, strict=False)
-    if gauss_moments.moments_status!=0:
+    ## Decide if psf_hsm is required in the first place or not. We calculate it nevertheless
+    calculate_psf_hsm = True if ((psf_w_sigma is None or psf_w_sigma>=0) and not round_moments) else False
+
+    psf_hsm = psf_img.FindAdaptiveMom(round_moments=round_moments, strict=False, hsmparams=hsmparams)
+    gal_hsm = gal_img.FindAdaptiveMom(round_moments=round_moments, strict=False, hsmparams=hsmparams)
+
+    if ((gal_hsm.moments_status!=0) or ((psf_hsm.moments_status!=0) and calculate_psf_hsm)):
         len_nw = len(nw) if hasattr(nw,'__iter__') else 1
         return [(-99,-99,-1)]*len_nw
 
-    centroid = [gauss_moments.moments_centroid.x - gal_img.center.x, gauss_moments.moments_centroid.y - gal_img.center.y]
+    ## Centroid calculation
+    gal_centroid = [gal_hsm.moments_centroid.x - gal_img.center.x, gal_hsm.moments_centroid.y - gal_img.center.y]
+    if calculate_psf_hsm:
+        psf_centroid = [psf_hsm.moments_centroid.x - psf_img.center.x, psf_hsm.moments_centroid.y - psf_img.center.y]
+    else:
+        psf_centroid = [-0.5,-0.5]
 
+    gal_scale = scale
     if psf_scale is None:
         ## Set psf_scale = scale, same as the galaxy scale
-        psf_scale = scale
+        psf_scale = gal_scale
 
-    psf_grid = generate_pixelgrid([-0.5,-0.5], psf_img.array.shape, scale=psf_scale)
-    gal_grid = generate_pixelgrid(centroid, gal_img.array.shape, scale=scale)
+    psf_grid = generate_pixelgrid(psf_centroid, psf_img.array.shape, scale=psf_scale)
+    gal_grid = generate_pixelgrid(gal_centroid, gal_img.array.shape, scale=gal_scale)
    
     ## If round_moments is True, we need a circular weight function. The observed_shape cannot be used as it contains the ellipticity of the object.
     ## Hence, the ellipticity has to be explicitly set to zero.
     if round_moments:
-        weight_g1, weight_g2 = 0., 0.
+        gal_weight_g1, gal_weight_g2 = 0., 0.
+        psf_weight_g1, psf_weight_g2 = 0., 0.
     else:
-        weight_g1, weight_g2 = gauss_moments.observed_shape.g1, gauss_moments.observed_shape.g2
+        gal_weight_g1, gal_weight_g2 = gal_hsm.observed_shape.g1, gal_hsm.observed_shape.g2
+        psf_weight_g1, psf_weight_g2 = psf_hsm.observed_shape.g1, psf_hsm.observed_shape.g2
     if w_sigma is None or w_sigma<=0.:
-        weight_sigma = gauss_moments.moments_sigma
+        gal_weight_sigma = gal_hsm.moments_sigma
     else:
-        weight_sigma = w_sigma
+        gal_weight_sigma = w_sigma
 
-    weight_sigma *= w_sigma_scalefactor
+    gal_weight_sigma *= w_sigma_scalefactor
 
-    weight = get_weight_image( gal_grid, weight_sigma, weight_g1, weight_g2 )
+    if psf_w_sigma is None:
+        psf_weight_sigma = gal_weight_sigma
+    elif psf_w_sigma==0:
+        psf_weight_sigma = psf_hsm.moments_sigma
+
+    gal_weight = get_weight_image( gal_grid, gal_weight_sigma, gal_weight_g1, gal_weight_g2 )
+    if psf_w_sigma<0.:
+        psf_weight = 1.
+    else:
+        psf_weight = get_weight_image( psf_grid, psf_weight_sigma, psf_weight_g2, psf_weight_g2 )
     
     if hasattr(nw,'__iter__'):
         nw_list = nw
@@ -137,23 +187,35 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigm
         nw_list = [ nw ]
 
     nw_max = max(nw_list)
-    DW = generate_deweighting_matrix( weight_sigma, weight_g1, weight_g2, nw=nw_max)
+    gal_DW = generate_deweighting_matrix( gal_weight_sigma, gal_weight_g1, gal_weight_g2, nw=nw_max)
+    if psf_w_sigma<0.:
+        psf_DW = np.eye(6,gal_DW.shape[1])
+    else:
+        psf_DW = generate_deweighting_matrix( psf_weight_sigma, psf_weight_g1, psf_weight_g2, nw=nw_max)
 
     kmax = (nw_max+3)*(nw_max+4)/2
-    weighted_img_moments, psf_moments = np.zeros(kmax), np.zeros(6)
+    weighted_gal_moments, weighted_psf_moments = np.zeros(kmax), np.zeros(kmax)
     for k in xrange(kmax):
         m,n = singlet_to_doublet(k)
-        if k<6:
-            psf_moments[k] = measure_moments(m,n,psf_img,psf_grid,1.,A=None)
-        weighted_img_moments[k] = measure_moments(m,n,gal_img,gal_grid,weight,A=None)
+        weighted_psf_moments[k] = measure_moments(m,n,psf_img,psf_grid,psf_weight,A=None)
+        weighted_gal_moments[k] = measure_moments(m,n,gal_img,gal_grid,gal_weight,A=None)
 
     ellipticity = [ ]
-    for nw in nw_list:
-        kmax = (nw+3)*(nw+4)/2
-        deweighted_img_moments = np.dot(DW[:,:kmax], weighted_img_moments[:kmax])
-        psf_corrected_moments = psf_correction(deweighted_img_moments, psf_moments, matrix_inv=matrix_inv)
+    for _nw in nw_list:
+        kmax = (_nw+3)*(_nw+4)/2
+        deweighted_gal_moments = np.dot(gal_DW[:,:kmax], weighted_gal_moments[:kmax])
+        deweighted_psf_moments = np.dot(psf_DW[:,:kmax], weighted_psf_moments[:kmax])
+        psf_corrected_moments = psf_correction(deweighted_gal_moments, deweighted_psf_moments, matrix_inv=matrix_inv)
         ellip = moments_to_ellipticity(psf_corrected_moments, etype=etype)
 
-        ellipticity.append( ellip+(0,) )
+        if ((psf_corrected_moments[doublet_to_singlet(0,2)]<0) or (psf_corrected_moments[doublet_to_singlet(2,0)]<0)):
+            status = -3
+        else:
+            status = 0 if moments_to_size(psf_corrected_moments, size_type='det')>=0 else -2
 
-    return ellipticity
+        ellipticity.append( ellip+(status,) )
+
+    if hasattr(nw,'__iter__'):
+        return ellipticity
+    else:
+        return ellipticity[0]

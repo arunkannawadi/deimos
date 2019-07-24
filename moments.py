@@ -1,3 +1,6 @@
+## Script implementing the moment calculations
+## Author: Arun Kannawadi
+
 import numpy as np
 import galsim
 import os, sys

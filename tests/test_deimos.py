@@ -93,10 +93,10 @@ def test_deimos():
     gal_img = galsim.Convolve([gal,psf]).drawImage(scale=scale, method='no_pixel')
     psf_img = psf.drawImage(scale=psf_scale, method='no_pixel')
 
-    print "True shape = ", gal_shape
-    for nw in [2,4,6]:
-        int_shape = deimos(gal_img, psf_img, nw=nw, scale=scale, psf_scale=psf_scale)
-        print "Measured shape for nw=", nw, " is ", int_shape
+    print "True shape = ", gal_shape.e1, gal_shape.e2
+    nw = [2,4,6]
+    int_shape = deimos(gal_img, psf_img, nw=nw, psf_w_sigma=None, scale=scale, psf_scale=psf_scale)
+    print "Measured shape for nw=", nw, " is ", int_shape
 
     t2 = time.time()
     print "test_deimos() completed in %f seconds." % (t2-t1)
