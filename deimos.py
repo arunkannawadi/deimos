@@ -95,8 +95,8 @@ def psf_correction(image_moments, psf_moments, matrix_inv=False):
 
     return gal_moments
 
-def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigma=None, w_sigma_scalefactor=1., psf_w_sigma=None, round_moments=False, hsmparams=None, matrix_inv=False):
-    """ Calculate the ellipticity of the galaxy using the DEIMOS method (Melchior et al., 2012) given the galaxy and PSF postage stamps.
+def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigma=None, w_sigma_scalefactor=1., psf_w_sigma=None, w_shape=None, psf_w_shape=None, round_moments=False, hsmparams=None, matrix_inv=False):
+    """ Calculate the intrinsic ellipticity of the galaxy using the DEIMOS method given the galaxy and PSF postage stamps.
 
         @params gal_img         Postage stamp of the PSF-convolved galaxy. This can either be a galsim.Image instance or a NumPy array.
         @params psf_img         Postage stamp of the PSF. This can either be a galsim.Image instance or a NumPy array.
@@ -115,7 +115,12 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigm
         @params psf_w_sigma             The width of the (circularised) Gaussian weight function, in units of pixels, to calculate the weighted moments of the PSF.
                                         If set to a negative value, unweighted moments are used. If set to 0, adaptive weights are computed internally.
                                         If set to None, the same width used for the galaxy image (along with w_sigma_scalefactor) is used (recommended). [Default: None]
-        @params round_moments           Setting this true will force the Gaussian to be circular (and slightlu faster computations). [Default: False]
+        @params w_shape                 A galsim.Shear instance that specifies that shape of the weight function for the galaxy,
+                                        useful to calculate selection response in the standard metacal. If None, then adaptive shapes are used. [Default: None]
+        @params psf_w_shape             A galsim.Shear instance that specifies that shape of the weight function for the PSF,
+                                        useful to calculate selection response in the standard metacal. If None, then adaptive shapes are used. [Default: None]
+        @params round_moments           Setting this to True will force the Gaussian to be circular (and slightly faster computations).
+                                        If True, this overrides the w_shape and psf_w_shape option. [Default: False]
         @params hsmparams               A galsim.hsm.HSMParams instance to change the default settings in the calculation of adaptive moments.
                                         If None, default values are used. [Default: None]
         @params matrix_inv              Whether to incorportate PSF-correction as a matrix operation or not. This choice has little impact on the results. [Default: False]
@@ -161,8 +166,16 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigm
         gal_weight_g1, gal_weight_g2 = 0., 0.
         psf_weight_g1, psf_weight_g2 = 0., 0.
     else:
-        gal_weight_g1, gal_weight_g2 = gal_hsm.observed_shape.g1, gal_hsm.observed_shape.g2
-        psf_weight_g1, psf_weight_g2 = psf_hsm.observed_shape.g1, psf_hsm.observed_shape.g2
+        if w_shape is None:
+            gal_weight_g1, gal_weight_g2 = gal_hsm.observed_shape.g1, gal_hsm.observed_shape.g2
+        else:
+            gal_weight_g1, gal_weight_g2 = w_shape.g1, w_shape.g2
+
+        if psf_w_shape is None:
+            psf_weight_g1, psf_weight_g2 = psf_hsm.observed_shape.g1, psf_hsm.observed_shape.g2
+        else:
+            psf_weight_g1, psf_weight_g2 = psf_w_shape.g1, psf_w_shape.g2
+
     if w_sigma is None or w_sigma<=0.:
         gal_weight_sigma = gal_hsm.moments_sigma
     else:
