@@ -58,8 +58,9 @@ def test_deweighting():
     grid = generate_pixelgrid(centroid=[-0.5,-0.5], size=img.array.shape,scale=scale)
     weight_img = get_weight_image(grid, hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2)
 
-    unweighted_moments = np.zeros(6)
-    for k in xrange(6):
+    ndw = 4
+    unweighted_moments = np.zeros((ndw+1)*(ndw+2)/2)
+    for k in xrange((ndw+1)*(ndw+2)/2):
         i,j = singlet_to_doublet(k)
         unweighted_moments[k] = measure_moments(i,j,img,grid,weight=1.)
     print "Unweighted moments: "
@@ -78,9 +79,9 @@ def test_deweighting():
         print deweighted_moments
 
     ta = time.time()
-    DW1 = generate_deweighting_matrix(hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=16)
+    DW1 = generate_deweighting_matrix(hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=16, ndw=ndw)
     tb = time.time()
-    DW2 = calculate_deweighting_matrix(hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=16)
+    DW2 = calculate_deweighting_matrix(hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=16, ndw=ndw)
     tc = time.time()
 
     print "generate_deweighting_matrix took  %f seconds." % (tb-ta)

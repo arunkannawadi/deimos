@@ -9,7 +9,7 @@ sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos/')
 from helper import *
 from moments import *
 
-def calculate_deweighting_matrix(sigma, e1, e2, nw=6):
+def calculate_deweighting_matrix(sigma, e1, e2, nw=6, ndw=2):
     """ Construct the deweighting matrix given the Gaussian weight parameters, up to order nw.
     Any even Natural number can be specified as nw. All entries are calculated from generic formulae.
     For nw<=10, generate_deweighting_matrix(), which uses hard-coded formulae, shows to be faster.
@@ -21,8 +21,9 @@ def calculate_deweighting_matrix(sigma, e1, e2, nw=6):
     c1 = (1.-e1)**2 + e2**2
     c2 = (1.+e1)**2 + e2**2
 
-    kmax = (nw+3)*(nw+4)/2
-    DW = np.eye(6,kmax) ## 0th order corrections
+    kmax = (nw+ndw+1)*(nw+ndw+2)/2
+    kdw_max = (ndw+1)*(ndw+2)/2
+    DW = np.eye(kdw_max,kmax) ## 0th order corrections
 
     DWtmp = np.zeros((nw+1,nw+1))
 
@@ -37,7 +38,7 @@ def calculate_deweighting_matrix(sigma, e1, e2, nw=6):
                 dj = b-a+n
                 DWtmp[di][dj] += prefactor*(c1**a)*(c2**b)*((-4*e2)**(n-a-b))/(factorial(a)*factorial(b)*factorial(n-a-b))
 
-    for kdw in xrange(6):
+    for kdw in xrange(kdw_max):
         i, j = singlet_to_doublet(kdw)
         for dipdj in xrange(1,nw+1):
             for dimdj in xrange(-dipdj, dipdj+1,2):
@@ -46,7 +47,7 @@ def calculate_deweighting_matrix(sigma, e1, e2, nw=6):
 
     return DW
 
-def generate_deweighting_matrix(sigma, e1, e2, nw=6):
+def generate_deweighting_matrix(sigma, e1, e2, nw=6, ndw=2):
     """ Construct the deweighting matrix given the Gaussian weight parameters, up to order nw.
     Admissible values of nw are even positive integers. For nw = 0, 2, 4, 6, 8, 10, hard coded computations are used.
     For nw>=12, generic formulae is used. In that case, calculate_deweighting_matrix shows to be faster.
@@ -58,10 +59,11 @@ def generate_deweighting_matrix(sigma, e1, e2, nw=6):
     c1 = (1.-e1)**2 + e2**2
     c2 = (1.+e1)**2 + e2**2
 
-    kmax = (nw+3)*(nw+4)/2
-    DW = np.eye(6,kmax) ## 0th order corrections
+    kmax = (nw+ndw+1)*(nw+ndw+2)/2
+    kdw_max = (ndw+1)*(ndw+2)/2
+    DW = np.eye(kdw_max,kmax) ## 0th order corrections
 
-    for kdw in xrange(6):
+    for kdw in xrange(kdw_max):
         i,j = singlet_to_doublet(kdw)
 
         if nw>=2:
@@ -134,7 +136,7 @@ def generate_deweighting_matrix(sigma, e1, e2, nw=6):
                         dj = b-a+n
                         DWtmp[di][dj] += prefactor*(c1**a)*(c2**b)*((-4*e2)**(n-a-b))/(factorial(a)*factorial(b)*factorial(n-a-b))
 
-            for kdw in xrange(6):
+            for kdw in xrange(kdw_max):
                 i, j = singlet_to_doublet(kdw)
                 for dipdj in xrange(12,nw+1):
                     for dimdj in xrange(-dipdj, dipdj+1,2):
@@ -143,7 +145,7 @@ def generate_deweighting_matrix(sigma, e1, e2, nw=6):
 
     return DW
 
-def get_deweighting_matrix(sigma, e1, e2, nw=6):
+def get_deweighting_matrix(sigma, e1, e2, nw=6, ndw=2):
     """ Generic wrapper to construct the deweighting matrix given the Gaussian weight parameters, up to order nw.
     Any even Natural number can be specified as nw. For nw<=10, generate_deweighting_matrix(), which uses hard-coded formulae,
     is executed as the tests show it be faster than calculate_deweighting_matrix(), which use generic formulate. For nw>=12,
@@ -151,9 +153,9 @@ def get_deweighting_matrix(sigma, e1, e2, nw=6):
     """
 
     if nw>10:
-        return calculate_deweighting_matrix(sigma, e1, e2, nw)
+        return calculate_deweighting_matrix(sigma, e1, e2, nw, ndw)
     else:
-        return generate_deweighting_matrix(sigma, e1, e2, nw)
+        return generate_deweighting_matrix(sigma, e1, e2, nw, ndw)
 
 def psf_correction(image_moments, psf_moments, matrix_inv=False):
     """ Given the PSF-convolved deweighted galaxy moments and PSF moments, calculate the moments of the intrinsic galaxy
