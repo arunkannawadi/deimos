@@ -9,19 +9,57 @@ sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos/')
 from helper import *
 from moments import *
 
-def generate_deweighting_matrix(sigma, e1, e2, nw=6):
+def calculate_deweighting_matrix(sigma, e1, e2, nw=6):
     """ Construct the deweighting matrix given the Gaussian weight parameters, up to order nw.
-    Admissible values of nw are: 0, 2, 4, 6
+    Any even Natural number can be specified as nw. All entries are calculated from generic formulae.
+    For nw<=10, generate_deweighting_matrix(), which uses hard-coded formulae, shows to be faster.
     """
 
-    if not nw in [0,2,4,6]:
+    if not ((nw>=0) and (nw%2==0)):
         raise ValueError('Cannot construct deweighting matrix to order %d' % (nw))
 
     c1 = (1.-e1)**2 + e2**2
     c2 = (1.+e1)**2 + e2**2
 
     kmax = (nw+3)*(nw+4)/2
-    DW = np.eye(6,kmax)
+    DW = np.eye(6,kmax) ## 0th order corrections
+
+    DWtmp = np.zeros((nw+1,nw+1))
+
+    for n in xrange(1,nw/2+1):
+        denom = (2.*sigma**2)**(n)
+        prefactor = 1./denom
+        ## It takes fewer iterations if we loop over a+b and a-b instead of a and b separately, since a+b<=n is to be satisfied.
+        for apb in xrange(n+1):
+            for amb in xrange(-apb,apb+1,2):
+                a,b = (apb+amb)/2, (apb-amb)/2
+                di = a-b+n
+                dj = b-a+n
+                DWtmp[di][dj] += prefactor*(c1**a)*(c2**b)*((-4*e2)**(n-a-b))/(factorial(a)*factorial(b)*factorial(n-a-b))
+
+    for kdw in xrange(6):
+        i, j = singlet_to_doublet(kdw)
+        for dipdj in xrange(1,nw+1):
+            for dimdj in xrange(-dipdj, dipdj+1,2):
+                di, dj = (dipdj+dimdj)/2, (dipdj-dimdj)/2
+                DW[kdw, doublet_to_singlet(i+di,j+dj)] = DWtmp[di][dj]
+
+    return DW
+
+def generate_deweighting_matrix(sigma, e1, e2, nw=6):
+    """ Construct the deweighting matrix given the Gaussian weight parameters, up to order nw.
+    Admissible values of nw are even positive integers. For nw = 0, 2, 4, 6, 8, 10, hard coded computations are used.
+    For nw>=12, generic formulae is used. In that case, calculate_deweighting_matrix shows to be faster.
+    """
+
+    if not ((nw>=0) and (nw%2==0)):
+        raise ValueError('Cannot construct deweighting matrix to order %d' % (nw))
+
+    c1 = (1.-e1)**2 + e2**2
+    c2 = (1.+e1)**2 + e2**2
+
+    kmax = (nw+3)*(nw+4)/2
+    DW = np.eye(6,kmax) ## 0th order corrections
 
     for kdw in xrange(6):
         i,j = singlet_to_doublet(kdw)
@@ -53,7 +91,69 @@ def generate_deweighting_matrix(sigma, e1, e2, nw=6):
             DW[kdw, doublet_to_singlet(i+1,j+5)] = -12.*e2*c2**2/denom
             DW[kdw, doublet_to_singlet(i+0,j+6)] = c2**3/denom
 
+        if nw>=8:
+            ## 8th order corrections
+            denom = sigma**8
+            DW[kdw, doublet_to_singlet(i+8,j+0)] = c1**4/(384.*denom)
+            DW[kdw, doublet_to_singlet(i+7,j+1)] = -e2*(c1**3)/(24.*denom)
+            DW[kdw, doublet_to_singlet(i+6,j+2)] = (c2*c1**3/96.+0.25*(c1**2)*(e2**2))/denom
+            DW[kdw, doublet_to_singlet(i+5,j+3)] = -(0.125*(c1**2)*c2*e2 + 2.*c1*e2**3/3.)/denom
+            DW[kdw, doublet_to_singlet(i+4,j+4)] = ((c1**2)*(c2**2)/64. + c1*c2*e2**2/2. + 2*e2**4/3.)/denom
+            DW[kdw, doublet_to_singlet(i+3,j+5)] = -(0.125*c1*e2*c2**2 + 2*c2*e2**3/3.)/denom
+            DW[kdw, doublet_to_singlet(i+2,j+6)] = (c1*c2**3/96. + 0.25*(c2**2)*(e2**2))/denom
+            DW[kdw, doublet_to_singlet(i+1,j+7)] = -e2*(c2**3)/(24.*denom)
+            DW[kdw, doublet_to_singlet(i+0,j+8)] = c2**4/(384.*denom)
+
+        if nw>=10:
+            ## 10th order corrections
+            denom = sigma**10
+            DW[kdw, doublet_to_singlet(i+10,j+0)] = (c1**5)/(3840.*denom)
+            DW[kdw, doublet_to_singlet(i+9,j+1)]  = -e2*c1**4/(192.*denom)
+            DW[kdw, doublet_to_singlet(i+8,j+2)]  = (c2*c1**4/768. + (c1**3)*(e2**2)/24.)/denom
+            DW[kdw, doublet_to_singlet(i+7,j+3)]  = -(e2*c2*c1**3/48. + (c1**2)*(e2**3)/6.)/denom
+            DW[kdw, doublet_to_singlet(i+6,j+4)]  = ((c1**3)*(c2**2)/384. + (c1**2)*c2*(e2**2)/8. + c1*e2**4/3.)/denom
+            DW[kdw, doublet_to_singlet(i+5,j+5)]  = -((c1**2)*(c2**2)*e2/32. + c1*c2*e2**3/3. + 4*e2**5/15.)/denom
+            DW[kdw, doublet_to_singlet(i+4,j+6)]  = ((c1**2)*(c2**3)/384. + 0.125*c1*(c2**2)*(e2**2) + c2*e2**4/3.)/denom
+            DW[kdw, doublet_to_singlet(i+3,j+7)]  = -(e2*c1*c2**3/48. + (c2**2)*(e2**3)/6.)/denom
+            DW[kdw, doublet_to_singlet(i+2,j+8)]  = (c1*c2**4/768. + (c2**3)*(e2**2)/24.)/denom
+            DW[kdw, doublet_to_singlet(i+1,j+9)]  = -e2*c2**4/(192.*denom)
+            DW[kdw, doublet_to_singlet(i+0,j+10)] = c2**5/(3840.*denom)
+
+        if nw>=12:
+            ## Compute all other higher order corrections from generic formulae
+            DWtmp = np.zeros((nw+1,nw+1))
+
+            for n in xrange(6,nw/2+1):
+                denom = (2.*sigma**2)**(n)
+                prefactor = 1./denom
+                ## It takes fewer iterations if we loop over a+b and a-b instead of a and b separately, since a+b<=n is to be satisfied.
+                for apb in xrange(n+1):
+                    for amb in xrange(-apb,apb+1,2):
+                        a,b = (apb+amb)/2, (apb-amb)/2
+                        di = a-b+n
+                        dj = b-a+n
+                        DWtmp[di][dj] += prefactor*(c1**a)*(c2**b)*((-4*e2)**(n-a-b))/(factorial(a)*factorial(b)*factorial(n-a-b))
+
+            for kdw in xrange(6):
+                i, j = singlet_to_doublet(kdw)
+                for dipdj in xrange(12,nw+1):
+                    for dimdj in xrange(-dipdj, dipdj+1,2):
+                        di, dj = (dipdj+dimdj)/2, (dipdj-dimdj)/2
+                        DW[kdw, doublet_to_singlet(i+di,j+dj)] = DWtmp[di][dj]
+
     return DW
+
+def get_deweighting_matrix(sigma, e1, e2, nw=6):
+    """ Generic wrapper to construct the deweighting matrix given the Gaussian weight parameters, up to order nw.
+    Any even Natural number can be specified as nw. For nw<=10, generate_deweighting_matrix(), which uses hard-coded formulae,
+    is executed as the tests show it be faster than calculate_deweighting_matrix(), which use generic formulate. For nw>=12,
+    the latter appears to be faster and is called.
+    """
+
+    if nw>10:
+        return calculate_deweighting_matrix(sigma, e1, e2, nw)
+    else:
+        return generate_deweighting_matrix(sigma, e1, e2, nw)
 
 def psf_correction(image_moments, psf_moments, matrix_inv=False):
     """ Given the PSF-convolved deweighted galaxy moments and PSF moments, calculate the moments of the intrinsic galaxy
@@ -108,8 +208,8 @@ def deimos(gal_img, psf_img, nw=6, scale=1., psf_scale=None, etype='chi', w_sigm
         @params etype                   The type of ellipticity to return. The admissible options are 'chi', 'epsilon', 'linear' (BJ02) and
                                         'flux_norm' (similar to 'linear' but normalised by the flux). The 'epsilon' type ellipticities fail if the determinant
                                         of the deweighted second moment matrix is negative. [Default: 'chi']
-        @params w_sigma                 The width of the (circularised) Gaussian weight function, in units of pixels, to calculate the weighted moments of the galaxy.
-                                        The moments_sigma value from galsim.ShapeData can be passed on without worrying about the pixel scale.
+        @params w_sigma                 The width of the (circularised) Gaussian weight function, in units of 'scale', to calculate the weighted moments of the galaxy.
+                                        The moments_sigma value from galsim.ShapeData must be passed after multiplication by the pixel scale.
                                         If set to a non-positive value or None, adaptive weights are computed internally. [Default: None]
         @params w_sigma_scalefactor     The number by which the w_sigma is to be scaled. [Default: 1]
         @params psf_w_sigma             The width of the (circularised) Gaussian weight function, in units of pixels, to calculate the weighted moments of the PSF.

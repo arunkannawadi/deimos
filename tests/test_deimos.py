@@ -56,7 +56,7 @@ def test_deweighting():
     img = galsim.Convolve([gal,psf]).drawImage(scale=scale)
     hsm = img.FindAdaptiveMom()
     grid = generate_pixelgrid(centroid=[-0.5,-0.5], size=img.array.shape,scale=scale)
-    weight_img = get_weight_image(grid, hsm.moments_sigma, hsm.observed_shape.g1, hsm.observed_shape.g2)
+    weight_img = get_weight_image(grid, hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2)
 
     unweighted_moments = np.zeros(6)
     for k in xrange(6):
@@ -65,18 +65,30 @@ def test_deweighting():
     print "Unweighted moments: "
     print unweighted_moments
 
-    weighted_moments = np.zeros(45)
-    for k in xrange(45):
+    weighted_moments = np.zeros(91)
+    for k in xrange(len(weighted_moments)):
         i,j = singlet_to_doublet(k)
         weighted_moments[k] = measure_moments(i,j,img,grid,weight=weight_img)
 
-    for nw in [2,4,6]:
+    for nw in [0,2,4,6,8,10]:
         kmax = (nw+3)*(nw+4)/2    
-        DW = generate_deweighting_matrix(hsm.moments_sigma, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=nw)
+        DW = generate_deweighting_matrix(hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=nw)
         deweighted_moments = np.dot(DW, weighted_moments[:kmax])
         print "Deweighted moments with nw = ", nw
         print deweighted_moments
-        
+
+    ta = time.time()
+    DW1 = generate_deweighting_matrix(hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=16)
+    tb = time.time()
+    DW2 = calculate_deweighting_matrix(hsm.moments_sigma*scale, hsm.observed_shape.g1, hsm.observed_shape.g2, nw=16)
+    tc = time.time()
+
+    print "generate_deweighting_matrix took  %f seconds." % (tb-ta)
+    print "calculate_deweighting_matrix took %f seconds." % (tc-tb)
+    # print DW1
+    # print DW2
+    np.testing.assert_array_almost_equal(DW1, DW2, decimal=10)
+
     t2 = time.time()
     print "test_deweighting() completed in %f seconds." % (t2-t1)
 
@@ -94,7 +106,7 @@ def test_deimos():
     psf_img = psf.drawImage(scale=psf_scale, method='no_pixel')
 
     print "True shape = ", gal_shape.e1, gal_shape.e2
-    nw = [2,4,6]
+    nw = [0,2,4,6,8,10]
     int_shape = deimos(gal_img, psf_img, nw=nw, psf_w_sigma=None, scale=scale, psf_scale=psf_scale)
     print "Measured shape for nw=", nw, " is ", int_shape
 

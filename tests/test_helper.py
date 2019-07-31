@@ -1,4 +1,4 @@
-import os, sys, time
+import os, sys, math, time
 sys.path.append('/Users/arunkannawadi/moments_metacal/')
 sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/')
 
@@ -64,6 +64,17 @@ def test_weight_image():
     t2 = time.time()
     print "test_weight_image() completed in %f seconds." % (t2-t1)
 
+def test_factorial():
+    t1 = time.time()
+    fact1 = np.array([math.factorial(num) for num in xrange(21)])
+    t_mid = time.time()
+    fact2 = np.array([factorial(num) for num in xrange(21)])
+    t2 = time.time()
+    print "Time for math.factorial = %f; Time for our factorial = %f" % (t_mid-t1, t2-t_mid)
+    np.testing.assert_array_equal(fact1, fact2)
+    print "test_factorial() completed in %f seconds" % (t2-t1)
+
 if __name__=='__main__':
     test_indices()
     test_weight_image()
+    test_factorial()

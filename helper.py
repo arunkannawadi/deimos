@@ -3,6 +3,7 @@
 
 import numpy as np
 import os, sys
+import math
 sys.path.append('/disks/shear15/arunkannawadi/Moments_Metacal/mydeimos')
 from metacal import shear_pixelgrid
 
@@ -128,3 +129,13 @@ def get_conversion_dicts(nmax=8):
         d2s[(i,j)] = k
 
     return d2s, s2d
+
+def factorial(n):
+    ## Pre-compute the frequently encountered factorials, although it hardly makes the overall code faster.
+    fact = [1,1,2,6,24,120,720,5040,40320,362880,3628800,39916800,479001600,6227020800,87178291200,1307674368000,20922789888000,355687428096000,6402373705728000,121645100408832000,2432902008176640000]
+    try:
+        fn = fact[n]
+    except IndexError:
+        fn = math.factorial(n)
+
+    return fn
